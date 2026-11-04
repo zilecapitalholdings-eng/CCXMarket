@@ -39,7 +39,7 @@ body{background:radial-gradient(ellipse at 8% 0%,rgba(124,58,237,.22),transparen
 <div class="app">
 <header class="topbar">
   <div class="brand"><div class="logo">CCX</div><div>CCXMarket<small>CRYPTO · COMMUNITY · OPPORTUNITIES</small></div></div>
-  <div class="top-actions"><span class="pill">● Prototype mode · Sample data</span><button class="secondary" onclick="notify('Account sign-in will be connected in the next stage.')">Sign in</button><div class="avatar">B</div></div>
+  <div class="top-actions"><span class="pill">● Prototype mode · Sample data</span><button class="secondary" id="authHeaderButton" onclick="openAuthModal()">Sign in</button><div class="avatar">B</div></div>
 </header>
 <div class="layout">
 <aside class="sidebar">
@@ -106,8 +106,37 @@ body{background:radial-gradient(ellipse at 8% 0%,rgba(124,58,237,.22),transparen
 <div class="footer-note">CCXMarket prototype · Sample data only · No real accounts, payouts, referral tracking, or private messaging are connected.</div>
 </main></div>
 <nav class="mobile-nav" id="mobileNav"><button class="active" data-section="home"><span>⌂</span>Home</button><button data-section="rooms"><span>▤</span>Rooms</button><button data-section="private"><span>♙</span>Private</button><button data-section="referrals"><span>↗</span>Referrals</button><button data-section="rewards"><span>◈</span>Rewards</button></nav>
+
+<div id="authModal" style="display:none;position:fixed;inset:0;z-index:50;background:rgba(3,6,18,.78);backdrop-filter:blur(8px);padding:18px;align-items:center;justify-content:center">
+ <div class="panel" style="width:min(100%,430px);max-height:90vh;overflow:auto;border-color:rgba(139,92,246,.5);box-shadow:0 25px 80px #0009">
+  <div class="panel-head"><div><div class="eyebrow">CCXMARKET ACCOUNT</div><h2 id="authTitle">Sign in</h2><div class="panel-sub" id="authSubtitle">Welcome back to the community.</div></div><button class="secondary" type="button" onclick="closeAuthModal()">✕</button></div>
+  <div class="filters" style="margin-bottom:15px"><button type="button" id="authSignInTab" class="active" onclick="setAuthMode('signin')">Sign in</button><button type="button" id="authSignUpTab" onclick="setAuthMode('signup')">Create account</button></div>
+  <form id="authForm"><div class="field" id="authUsernameWrap" style="display:none;margin-bottom:12px"><label for="authUsername">Username</label><input id="authUsername" maxlength="30" autocomplete="username" placeholder="Choose a username"></div>
+   <div class="field" style="margin-bottom:12px"><label for="authEmail">Email address</label><input id="authEmail" type="email" required autocomplete="email" placeholder="you@example.com"></div>
+   <div class="field" style="margin-bottom:15px"><label for="authPassword">Password</label><input id="authPassword" type="password" required minlength="8" autocomplete="current-password" placeholder="At least 8 characters"></div>
+   <button class="primary" id="authSubmit" type="submit" style="width:100%">Sign in</button></form>
+  <div class="notice" id="authMessage" style="margin:14px 0 0">Your account is managed securely by Supabase. Never share your password.</div>
+ </div>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const CCX_SUPABASE_URL="https://vsuwdjlimoewtbvefsls.supabase.co";
+const CCX_SUPABASE_PUBLISHABLE_KEY="sb_publishable_lLM4-GbwWIj6YK6BbpzdTw_ixYAHFFf";
+const ccxSupabase=window.supabase.createClient(CCX_SUPABASE_URL,CCX_SUPABASE_PUBLISHABLE_KEY);
+let ccxAuthMode="signin";
+function openAuthModal(){document.getElementById("authModal").style.display="flex";document.getElementById("authMessage").textContent="Your account is managed securely by Supabase. Never share your password."}
+function closeAuthModal(){document.getElementById("authModal").style.display="none"}
+function setAuthMode(mode){ccxAuthMode=mode;document.getElementById("authTitle").textContent=mode==="signup"?"Create your account":"Sign in";document.getElementById("authSubtitle").textContent=mode==="signup"?"Join the CCXMarket community.":"Welcome back to the community.";document.getElementById("authUsernameWrap").style.display=mode==="signup"?"flex":"none";document.getElementById("authPassword").autocomplete=mode==="signup"?"new-password":"current-password";document.getElementById("authSubmit").textContent=mode==="signup"?"Create account":"Sign in";document.getElementById("authSignInTab").classList.toggle("active",mode==="signin");document.getElementById("authSignUpTab").classList.toggle("active",mode==="signup");document.getElementById("authMessage").textContent=mode==="signup"?"Use an email address you can access. Supabase may send a confirmation email.":"Enter your registered email and password."}
+function updateAuthUI(user){const b=document.getElementById("authHeaderButton");if(user){b.textContent="Sign out";b.onclick=ccxSignOut;document.querySelector(".avatar").textContent=(user.user_metadata?.username||user.email||"U").charAt(0).toUpperCase()}else{b.textContent="Sign in";b.onclick=openAuthModal;document.querySelector(".avatar").textContent="B"}}
+async function ccxSignOut(){const {error}=await ccxSupabase.auth.signOut();if(error){notify("Sign-out failed: "+error.message);return}updateAuthUI(null);notify("You have signed out.")}
+document.getElementById("authForm").addEventListener("submit",async e=>{e.preventDefault();const email=document.getElementById("authEmail").value.trim();const password=document.getElementById("authPassword").value;const username=document.getElementById("authUsername").value.trim();const submit=document.getElementById("authSubmit");const message=document.getElementById("authMessage");submit.disabled=true;submit.textContent="Please wait…";try{if(ccxAuthMode==="signup"){const {data,error}=await ccxSupabase.auth.signUp({email,password,options:{data:{username}}});if(error)throw error;if(data.session){closeAuthModal();updateAuthUI(data.user);notify("Your CCXMarket account is ready.")}else{message.textContent="Registration received. Check your email for a confirmation link before signing in."}}else{const {data,error}=await ccxSupabase.auth.signInWithPassword({email,password});if(error)throw error;closeAuthModal();updateAuthUI(data.user);notify("You are signed in to CCXMarket.")}}catch(error){message.textContent=error.message||"Authentication could not be completed."}finally{submit.disabled=false;submit.textContent=ccxAuthMode==="signup"?"Create account":"Sign in"}});
+ccxSupabase.auth.getSession().then(({data})=>updateAuthUI(data.session?.user||null));
+ccxSupabase.auth.onAuthStateChange((_event,session)=>updateAuthUI(session?.user||null));
+</script>
+
 <script>
 const initialRooms=[
 {id:'general',name:'General Community',desc:'Meet members and start a conversation.',icon:'💬',category:'community',members:248,visibility:'Public'},
